@@ -3,6 +3,7 @@ from architectures import *
 from utils import *
 from datasets import *
 from submission_serialization import serialize
+import copy
 
 import numpy as np
 import torch
@@ -20,18 +21,22 @@ def training_loop(network: torch.nn.Module,
                   train_data: torch.utils.data.Dataset,
                   eval_data: torch.utils.data.Dataset,
                   num_epochs: int,
+                  batch_size: int,
+                  learning_rate: float,
+                  stop_progress_after: int,
                   show_progress: bool = False) -> tuple[list, list]:
 
-    optimizer = torch.optim.Adam(network.parameters(), lr=0.001)
+    optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
     criterion = torch.nn.MSELoss()
-    train_data_loader = DataLoader(train_data, shuffle=True, batch_size=32, collate_fn=stack_with_padding, num_workers=8)
-    eval_data_loader = DataLoader(eval_data, shuffle=True, batch_size=32, collate_fn=stack_with_padding, num_workers=8)
+    train_data_loader = DataLoader(train_data, shuffle=True, batch_size=batch_size, collate_fn=stack_with_padding, num_workers=8)
+    eval_data_loader = DataLoader(eval_data, shuffle=True, batch_size=batch_size, collate_fn=stack_with_padding, num_workers=8)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     training_losses = []
     evaluation_losses = []
     best_eval_loss = float('inf')
     no_improve_epochs = 0
+    best_model_state_dict = None
 
     for epoch in range(num_epochs):
         network.train()
@@ -56,7 +61,7 @@ def training_loop(network: torch.nn.Module,
                 target = target_arrays[i]
                 known_array = stacked_known_arrays[i]
 
-                masked_output = output[known_array.bool()]
+                masked_output = output[~known_array.bool()]
                 target_flatten = target.flatten()
 
                 loss = criterion(masked_output, target_flatten)
@@ -90,7 +95,7 @@ def training_loop(network: torch.nn.Module,
                     target = target_arrays[i]
                     known_array = stacked_known_arrays[i]
 
-                    masked_output = output[known_array.bool()]
+                    masked_output = output[~known_array.bool()]
                     target_flatten = target.flatten()
 
                     loss = criterion(masked_output, target_flatten)
@@ -110,15 +115,19 @@ def training_loop(network: torch.nn.Module,
 
             # Saving the best model
             torch.save(network.state_dict(), 'best_model.pth')
+            best_model_state_dict = network.state_dict()
             print("Best model saved at epoch: ", epoch+1)
 
         else:
             no_improve_epochs += 1
             print(f"No improvement in evaluation loss at epoch {epoch+1}. Count: {no_improve_epochs}")
 
-        if no_improve_epochs >= 3:
-            print(f"No improvement in evaluation loss for 3 consecutive epochs, stopping training at epoch {epoch+1}")
+        if no_improve_epochs >= stop_progress_after:
+            print(f"No improvement in evaluation loss for {stop_progress_after} consecutive epochs, stopping training at epoch {epoch+1}")
             break
+
+    if best_model_state_dict is not None:
+            network.load_state_dict(best_model_state_dict)
 
     return training_losses, evaluation_losses, network
 
@@ -184,10 +193,11 @@ def main():
         else:
             raise ValueError("There are more than 0.01%% faulty images, please check the logs")
 
-    train_data, eval_data = create_datasets(config.IMAGES, 9/10, (4,32), (4,32), (4,16))
+    train_data, eval_data = create_datasets(config.IMAGES, 5/6, (4,32), (4,32), (4,16))
 
     model = ImageDepixelationModel([    
         {'in_channels': 2, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
         {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
         {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
         {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
@@ -201,7 +211,7 @@ def main():
 
 
     # Train the model
-    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=5, show_progress=True)
+    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=10, show_progress=True, learning_rate=0.001, batch_size=64, stop_progress_after=3)
 
     # save the network/model
     save(model,config.MODELS_DIR)

@@ -60,8 +60,8 @@ def _prepare_image(image: np.ndarray, x: int, y: int, width: int, height: int, s
     # This returns already a copy, so we are independent of "image"
     pixelated_image = _pixelate(image, x, y, width, height, size)
     
-    known_array = np.zeros_like(image, dtype=bool)
-    known_array[area] = True
+    known_array = np.ones_like(image, dtype=bool)
+    known_array[area] = False
     
     # Create a copy to avoid that "target_array" and "image" point to the same array
     target_array = image[area].copy()

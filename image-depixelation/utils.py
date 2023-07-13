@@ -84,7 +84,7 @@ def stack_with_padding(batch_as_list: list):
         padded_pixelated_image[:, :pixelated_image.shape[1], :pixelated_image.shape[2]] = pixelated_image
         stacked_pixelated_images.append(padded_pixelated_image)
 
-        padded_known_array = np.zeros(shape[1:], dtype=known_array.dtype)
+        padded_known_array = np.ones(shape[1:], dtype=known_array.dtype)
         padded_known_array[:, :known_array.shape[1], :known_array.shape[2]] = known_array
         stacked_known_arrays.append(padded_known_array)
 
