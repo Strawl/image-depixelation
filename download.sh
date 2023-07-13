@@ -1,9 +1,3 @@
-!rm -r ./image*
-
-git clone https://github.com/Strawl/image-depixelation.git
-pip install -r ./image-depixelation/requirements.txt
-!chmod +x ./image-depixelation/download.sh
-
 rm -r ./tmp
 
 # Download the files

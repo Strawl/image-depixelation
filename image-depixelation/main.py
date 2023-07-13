@@ -203,27 +203,42 @@ def main():
         height_range=(4,32), 
         size_range=(4,16), 
         crop_size=64, 
-        num_crops=2
+        num_crops=3
     )
 
 
-    model = ImageDepixelationModel([    
-        {'in_channels': 2, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
-        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
-        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
-        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
-        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
-        {'in_channels': 32, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
-    ])
     #model = ImageDepixelationModel([    
-        #{'in_channels': 2, 'out_channels': 8, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
-        #{'in_channels': 8, 'out_channels': 8, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
-        #{'in_channels': 8, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.Identity, 'batchnorm': False},
+        #{'in_channels': 2, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        #{'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        #{'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        #{'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        #{'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        #{'in_channels': 32, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
     #])
+
+    # Third submission, it finnally has beaten the basic one :D
+    #model = ImageDepixelationModel([    
+        #{'in_channels': 2, 'out_channels': 64, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        #{'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        #{'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        #{'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        #{'in_channels': 64, 'out_channels': 64, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        #{'in_channels': 64, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+    #])
+
+    # haven't tried out this one yet
+    model = ImageDepixelationModel([    
+        {'in_channels': 2, 'out_channels': 128, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        {'in_channels': 128, 'out_channels': 96, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        {'in_channels': 96, 'out_channels': 64, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        {'in_channels': 64, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        {'in_channels': 32, 'out_channels': 16, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        {'in_channels': 16, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+    ])
 
 
     # Train the model
-    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=10, show_progress=True, learning_rate=0.001, batch_size=64, stop_progress_after=2, weight_decay=0.00001)
+    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=30, show_progress=True, learning_rate=0.0001, batch_size=64, stop_progress_after=2, weight_decay=0.00001)
 
     # save the network/model
     save(model,config.MODELS_DIR)
