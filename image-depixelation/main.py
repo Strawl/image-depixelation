@@ -14,7 +14,6 @@ from statistics import mean
 import numpy as np
 
 import config
-
 import torch
 
 def training_loop(network: torch.nn.Module,
@@ -23,14 +22,18 @@ def training_loop(network: torch.nn.Module,
                   num_epochs: int,
                   batch_size: int,
                   learning_rate: float,
+                  weight_decay: float, 
                   stop_progress_after: int,
                   show_progress: bool = False) -> tuple[list, list]:
 
-    optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(network.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = torch.nn.MSELoss()
     train_data_loader = DataLoader(train_data, shuffle=True, batch_size=batch_size, collate_fn=stack_with_padding, num_workers=8)
     eval_data_loader = DataLoader(eval_data, shuffle=True, batch_size=batch_size, collate_fn=stack_with_padding, num_workers=8)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+    model = model.to(device)
 
     training_losses = []
     evaluation_losses = []
@@ -220,7 +223,7 @@ def main():
 
 
     # Train the model
-    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=10, show_progress=True, learning_rate=0.001, batch_size=64, stop_progress_after=2)
+    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=10, show_progress=True, learning_rate=0.001, batch_size=64, stop_progress_after=2, weight_decay=0.00001)
 
     # save the network/model
     save(model,config.MODELS_DIR)
