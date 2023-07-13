@@ -1,11 +1,178 @@
-from validate import validate_images
+from validate import *
+from architectures import *
+from utils import *
+from datasets import *
+from submission_serialization import serialize
+
+import numpy as np
+import torch
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+from statistics import mean
+import numpy as np
+
 import config
-from utils import create_datasets
-from train import training_loop, plot_losses
-from network import ImageDepixelationModel
-import torch.nn as nn
+
+import torch
+
+def training_loop(network: torch.nn.Module,
+                  train_data: torch.utils.data.Dataset,
+                  eval_data: torch.utils.data.Dataset,
+                  num_epochs: int,
+                  show_progress: bool = False) -> tuple[list, list]:
+
+    optimizer = torch.optim.Adam(network.parameters(), lr=0.001)
+    criterion = torch.nn.MSELoss()
+    train_data_loader = DataLoader(train_data, shuffle=True, batch_size=32, collate_fn=stack_with_padding, num_workers=8)
+    eval_data_loader = DataLoader(eval_data, shuffle=True, batch_size=32, collate_fn=stack_with_padding, num_workers=8)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    training_losses = []
+    evaluation_losses = []
+    best_eval_loss = float('inf')
+    no_improve_epochs = 0
+
+    for epoch in range(num_epochs):
+        network.train()
+
+        epoch_training_losses = []
+        epoch_eval_losses = []
+
+        loop = tqdm(train_data_loader, disable=not show_progress)
+
+        for stacked_pixelated_images, stacked_known_arrays, target_arrays, _ in loop:
+            stacked_pixelated_images = stacked_pixelated_images.to(device)
+            stacked_known_arrays = stacked_known_arrays.to(device)
+            target_arrays = [target.to(device) for target in target_arrays]
+
+            optimizer.zero_grad()
+
+            outputs = network(stacked_pixelated_images)
+
+            losses = []
+            for i in range(len(outputs)):
+                output = outputs[i]
+                target = target_arrays[i]
+                known_array = stacked_known_arrays[i]
+
+                masked_output = output[known_array.bool()]
+                target_flatten = target.flatten()
+
+                loss = criterion(masked_output, target_flatten)
+                losses.append(loss)
+
+            loss = sum(losses) / len(losses)
+            loss.backward()  
+            optimizer.step()  
+
+            epoch_training_losses.append(loss.item())
+
+            loop.set_description(f"Epoch [{epoch + 1}/{num_epochs}]")
+            loop.set_postfix(loss=np.mean(epoch_training_losses))
+
+        training_losses.append(mean(epoch_training_losses))
+
+        print(f"Training loss at epoch {epoch+1}: {mean(epoch_training_losses)}")
+
+        network.eval()
+        with torch.no_grad():
+            for stacked_pixelated_images, stacked_known_arrays, target_arrays, _ in eval_data_loader:
+                stacked_pixelated_images = stacked_pixelated_images.to(device)
+                stacked_known_arrays = stacked_known_arrays.to(device)
+                target_arrays = [target.to(device) for target in target_arrays]
+
+                outputs = network(stacked_pixelated_images)
+
+                eval_losses = []
+                for i in range(len(outputs)):
+                    output = outputs[i]
+                    target = target_arrays[i]
+                    known_array = stacked_known_arrays[i]
+
+                    masked_output = output[known_array.bool()]
+                    target_flatten = target.flatten()
+
+                    loss = criterion(masked_output, target_flatten)
+                    eval_losses.append(loss.item())
+
+                epoch_eval_losses.append(mean(eval_losses))
+
+        eval_loss = mean(epoch_eval_losses)
+        evaluation_losses.append(eval_loss)
+
+        print(f"Evaluation loss at epoch {epoch+1}: {eval_loss}")
+
+        if eval_loss < best_eval_loss:
+            best_eval_loss = eval_loss
+            no_improve_epochs = 0
+            print(f"Best evaluation loss so far at epoch {epoch+1}: {best_eval_loss}")
+
+            # Saving the best model
+            torch.save(network.state_dict(), 'best_model.pth')
+            print("Best model saved at epoch: ", epoch+1)
+
+        else:
+            no_improve_epochs += 1
+            print(f"No improvement in evaluation loss at epoch {epoch+1}. Count: {no_improve_epochs}")
+
+        if no_improve_epochs >= 3:
+            print(f"No improvement in evaluation loss for 3 consecutive epochs, stopping training at epoch {epoch+1}")
+            break
+
+    return training_losses, evaluation_losses, network
+
+
+
+def predict_original_values(model: torch.nn.Module, test_set_path: str) -> list:
+
+    test_set = ImageDepixelationTestDataset(test_set_path)
+
+    test_loader = torch.utils.data.DataLoader(
+        test_set,
+        batch_size=1,
+        shuffle=False,
+        num_workers=8
+    )
+
+
+    # Use cuda if available
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = model.to(device)
+    model.eval()
+
+    # To store predictions
+    predictions = []
+
+    # Evaluate the model
+    with torch.no_grad():
+        for stacked_pixelated_images, stacked_known_arrays, in test_loader:
+            stacked_pixelated_images = stacked_pixelated_images.to(device)
+            stacked_known_arrays = stacked_known_arrays.to(device)
+
+            outputs = model(stacked_pixelated_images)
+
+            for i in range(len(outputs)):
+                output = outputs[i]
+                known_array = stacked_known_arrays[i]
+
+                # Get the output where the known array is False, i.e., the pixelated images
+                predicted_output = output[~known_array.bool()]
+
+                predicted_output = predicted_output * 255
+
+                predicted_output = predicted_output.detach().cpu().numpy().astype(np.uint8)
+
+                # Append flattened array to the list
+                predictions.append(predicted_output.flatten())
+
+    return predictions
+
+    
 
 def main():
+    np.random.seed(0)
+    torch.manual_seed(0)
     # validation stage:
     if not config.SKIP_VALIDATION:
         print("Start validating images")
@@ -17,27 +184,36 @@ def main():
         else:
             raise ValueError("There are more than 0.01%% faulty images, please check the logs")
 
-    train_data, eval_data = create_datasets(config.IMAGES, 4/5, (50,80), (50,80), (5,10))
+    train_data, eval_data = create_datasets(config.IMAGES, 9/10, (4,32), (4,32), (4,16))
 
-    #model = ImageDepixelationModel([    
-        #{'in_channels': 1, 'out_channels': 64, 'kernel_size': 9, 'activation': nn.ReLU, 'batchnorm': True},
-        #{'in_channels': 64, 'out_channels': 32, 'kernel_size': 1, 'activation': nn.ReLU, 'batchnorm': True},
-        #{'in_channels': 32, 'out_channels': 1, 'kernel_size': 5, 'activation': nn.Identity, 'batchnorm': True},
-    #])
     model = ImageDepixelationModel([    
-        {'in_channels': 1, 'out_channels': 8, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
-        {'in_channels': 8, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.Identity, 'batchnorm': False},
+        {'in_channels': 2, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        {'in_channels': 32, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
+        {'in_channels': 32, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
     ])
+    #model = ImageDepixelationModel([    
+        #{'in_channels': 2, 'out_channels': 8, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        #{'in_channels': 8, 'out_channels': 8, 'kernel_size': 3, 'activation': nn.ReLU, 'batchnorm': False},
+        #{'in_channels': 8, 'out_channels': 1, 'kernel_size': 3, 'activation': nn.Identity, 'batchnorm': False},
+    #])
 
 
     # Train the model
-    train_losses, eval_losses = training_loop(model, train_data, eval_data, num_epochs=1, show_progress=True)
+    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=5, show_progress=True)
+
+    # save the network/model
+    save(model,config.MODELS_DIR)
 
     # Plot the losses
     plot_losses(train_losses, eval_losses)
 
+    predictions = predict_original_values(model, config.TEST_SET)
+    serialize(predictions, 'predictions.bin')
 
 
+    
 
         
     

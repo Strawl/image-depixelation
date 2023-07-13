@@ -1,6 +1,7 @@
 # project_specific
 *.zip
 *.pkl
+tmp/
 images/
 
 # Byte-compiled / optimized / DLL files

@@ -1,10 +1,16 @@
-from typing import Optional, Sequence, Union
+from typing import Optional
 
 import numpy as np
 from torch.utils.data import Dataset
 import os
 import glob
 from PIL import Image
+from torchvision import transforms
+from PIL import Image
+import config
+import dill
+import pickle
+
 
 
 def _to_grayscale(pil_image: np.ndarray) -> np.ndarray:
@@ -108,6 +114,12 @@ class RandomImagePixelationDataset(Dataset):
             raise ValueError("The minimum sizes cannot be smaller than 2")
         if width_range[0] > width_range[1] or height_range[0] > height_range[1] or size_range[0] > size_range[1]:
             raise ValueError("The minimum sizes cannot exceed the maximum sizes")
+        
+        self.resize_transforms = transforms.Compose([
+                transforms.Resize(size=config.IMG_SIZE),
+                transforms.CenterCrop(size=(config.IMG_SIZE, config.IMG_SIZE)),
+        ])
+
         self.width_range = width_range
         self.height_range = height_range
         self.size_range = size_range
@@ -115,6 +127,7 @@ class RandomImagePixelationDataset(Dataset):
 
     def __getitem__(self, index):
         image = Image.open(self.image_paths[index])
+        image = self.resize_transforms(image)
         numpy_array = np.array(image, dtype=self.dtype)
         image_width, image_height = image.size
         grayscale_image = _to_grayscale(numpy_array)
@@ -130,10 +143,35 @@ class RandomImagePixelationDataset(Dataset):
         pixelated_image = (pixelated_image / 255).astype(np.float32)
         target_array = (target_array / 255).astype(np.float32)
 
+        #full_image = np.concatenate((pixelated_image, known_array), axis=0)
         return pixelated_image, known_array, target_array, self.image_paths[index]
 
 
     def __len__(self):
         return len(self.image_paths)
+
+
+import numpy as np
+
+class ImageDepixelationTestDataset(Dataset):
+    def __init__(self, data_path):
+        with open(data_path, 'rb') as file:
+            data_dict = pickle.load(file)
+        
+        self.pixelated_images = data_dict['pixelated_images']
+        self.known_arrays = data_dict['known_arrays']
+
+    def __getitem__(self, index):
+        pixelated_image = self.pixelated_images[index]
+        pixelated_image = (pixelated_image / 255).astype(np.float32)
+        known_array = self.known_arrays[index]
+
+        full_image = np.concatenate((pixelated_image, known_array), axis=0)
+
+        return full_image, known_array
+
+    def __len__(self):
+        return len(self.pixelated_images)
+
 
 

@@ -9,6 +9,7 @@ import os
 from sklearn.model_selection import train_test_split
 from datasets import RandomImagePixelationDataset
 import matplotlib.pyplot as plt
+import uuid
 
 
 
@@ -26,6 +27,28 @@ def create_datasets(image_path, train_ratio, width_range, height_range, size_ran
     return train_dataset, test_dataset
 
 
+def save(model: torch.nn.Module, models_dir: str):
+    # Create the directory if it doesn't exist
+    if not os.path.exists(models_dir):
+        os.makedirs(models_dir)
+
+    # Generate a unique identifier for the model
+    model_id = uuid.uuid4()
+
+    # Save the model with the UUID filename
+    model_path = os.path.join(models_dir, f"{model_id}.pth")
+    torch.save(model.state_dict(), model_path)
+    return model_path
+
+def load(model: torch.nn.Module, models_dir: str, model_id: str):
+    # Construct the model path from the directory and the UUID
+    model_path = os.path.join(models_dir, f"{model_id}.pth")
+
+    # Load the model state_dict from the file
+    model.load_state_dict(torch.load(model_path))
+    return model
+
+
 def random_augmented_image(image: Image, image_size: Union[int, Sequence[int]], seed: int) -> torch.Tensor:
     random.seed(seed)
 
@@ -40,7 +63,6 @@ def random_augmented_image(image: Image, image_size: Union[int, Sequence[int]], 
     image = potential_transformations.pop(random.randrange(len(potential_transformations)))(image)
     tensor = torchvision.transforms.ToTensor()(image)
     return torch.nn.Dropout()(tensor)
-
 
 
 
@@ -69,8 +91,22 @@ def stack_with_padding(batch_as_list: list):
         target_arrays.append(torch.tensor(target_array))
         image_files.append(image_file)
 
-    stacked_pixelated_images = torch.tensor(np.array(stacked_pixelated_images))
+    stacked_pixelated_images_numpy = np.array(stacked_pixelated_images)
+    stacked_known_arrays_numpy = np.array(stacked_known_arrays)
+    stacked_pixelated_images = torch.tensor(
+        np.concatenate((stacked_pixelated_images_numpy, stacked_known_arrays_numpy), axis=1)
+    )
     stacked_known_arrays = torch.tensor(np.array(stacked_known_arrays))
 
-
     return stacked_pixelated_images, stacked_known_arrays, target_arrays, image_files
+
+
+def plot_losses(train_losses: list, eval_losses: list):
+    plt.figure(figsize=(10, 7))
+    plt.plot(train_losses, label='Training Loss')
+    plt.plot(eval_losses, label='Evaluation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Mean Squared Error Loss')
+    plt.legend()
+    plt.title('Training and Evaluation Losses')
+    plt.show()
