@@ -193,7 +193,16 @@ def main():
         else:
             raise ValueError("There are more than 0.01%% faulty images, please check the logs")
 
-    train_data, eval_data = create_datasets(config.IMAGES, 5/6, (4,32), (4,32), (4,16))
+    train_data, eval_data = create_datasets(
+        image_path=config.IMAGES, 
+        train_ratio=5/6, 
+        width_range=(4,32), 
+        height_range=(4,32), 
+        size_range=(4,16), 
+        crop_size=64, 
+        num_crops=2
+    )
+
 
     model = ImageDepixelationModel([    
         {'in_channels': 2, 'out_channels': 32, 'kernel_size': 3, 'activation': nn.LeakyReLU, 'batchnorm': False},
@@ -211,7 +220,7 @@ def main():
 
 
     # Train the model
-    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=10, show_progress=True, learning_rate=0.001, batch_size=64, stop_progress_after=3)
+    train_losses, eval_losses, model = training_loop(model, train_data, eval_data, num_epochs=10, show_progress=True, learning_rate=0.001, batch_size=64, stop_progress_after=2)
 
     # save the network/model
     save(model,config.MODELS_DIR)

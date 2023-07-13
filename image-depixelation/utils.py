@@ -7,24 +7,29 @@ import random
 import numpy as np
 import os
 from sklearn.model_selection import train_test_split
-from datasets import RandomImagePixelationDataset
+from datasets import RandomImagePixelationDataset, CropDataset
 import matplotlib.pyplot as plt
 import uuid
 
 
 
-def create_datasets(image_path, train_ratio, width_range, height_range, size_range):
+def create_datasets(image_path, train_ratio, width_range, height_range, size_range, crop_size=64, num_crops=3):
     # List all subdirectories in image_path
     all_dirs = [os.path.join(image_path, d) for d in os.listdir(image_path) if os.path.isdir(os.path.join(image_path, d))]
 
     # Split directories into train and test sets
     train_dirs, test_dirs = train_test_split(all_dirs, train_size=train_ratio, random_state=42)
 
-    # Create datasets from the lists of directories
-    train_dataset = RandomImagePixelationDataset(train_dirs, width_range, height_range, size_range)
-    test_dataset = RandomImagePixelationDataset(test_dirs, width_range, height_range, size_range)
+    # Create CropDataset for train and test sets
+    train_crop_dataset = CropDataset(train_dirs, crop_size, num_crops)
+    test_crop_dataset = CropDataset(test_dirs, crop_size, num_crops)
+
+    # Create RandomImagePixelationDataset from the CropDatasets
+    train_dataset = RandomImagePixelationDataset(train_crop_dataset, width_range, height_range, size_range)
+    test_dataset = RandomImagePixelationDataset(test_crop_dataset, width_range, height_range, size_range)
 
     return train_dataset, test_dataset
+
 
 
 def save(model: torch.nn.Module, models_dir: str):

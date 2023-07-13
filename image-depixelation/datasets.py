@@ -91,67 +91,66 @@ def _get_absolute_path(path):
     return absolute_path
 
 
-class RandomImagePixelationDataset(Dataset):
-    def __init__(
-            self,
-            image_dirs: list, 
-            width_range: tuple[int, int],
-            height_range: tuple[int, int],
-            size_range: tuple[int, int],
-            dtype: Optional[type] = None
-    ):
+#class RandomImagePixelationDataset(Dataset):
+    #def __init__(
+            #self,
+            #image_dirs: list, 
+            #width_range: tuple[int, int],
+            #height_range: tuple[int, int],
+            #size_range: tuple[int, int],
+            #dtype: Optional[type] = None
+    #):
 
-        self.image_paths = []
+        #self.image_paths = []
 
-        for image_dir in image_dirs:
-            image_dir = os.path.abspath(image_dir)
-            filelist = glob.glob(os.path.join(image_dir, "**", "*"), recursive=True)
-            self.image_paths.extend([_get_absolute_path(f) for f in filelist if f.endswith(".jpg") and os.path.isfile(f)])
+        #for image_dir in image_dirs:
+            #image_dir = os.path.abspath(image_dir)
+            #filelist = glob.glob(os.path.join(image_dir, "**", "*"), recursive=True)
+            #self.image_paths.extend([_get_absolute_path(f) for f in filelist if f.endswith(".jpg") and os.path.isfile(f)])
 
-        self.image_paths.sort()
+        #self.image_paths.sort()
 
-        if width_range[0] < 2 or height_range[0] < 2 or size_range[0] < 2:
-            raise ValueError("The minimum sizes cannot be smaller than 2")
-        if width_range[0] > width_range[1] or height_range[0] > height_range[1] or size_range[0] > size_range[1]:
-            raise ValueError("The minimum sizes cannot exceed the maximum sizes")
+        #if width_range[0] < 2 or height_range[0] < 2 or size_range[0] < 2:
+            #raise ValueError("The minimum sizes cannot be smaller than 2")
+        #if width_range[0] > width_range[1] or height_range[0] > height_range[1] or size_range[0] > size_range[1]:
+            #raise ValueError("The minimum sizes cannot exceed the maximum sizes")
         
-        self.resize_transforms = transforms.Compose([
-                transforms.Resize(size=config.IMG_SIZE),
-                transforms.CenterCrop(size=(config.IMG_SIZE, config.IMG_SIZE)),
-        ])
+        #self.resize_transforms = transforms.Compose([
+                #transforms.Resize(size=config.IMG_SIZE),
+                #transforms.CenterCrop(size=(config.IMG_SIZE, config.IMG_SIZE)),
+        #])
 
-        self.width_range = width_range
-        self.height_range = height_range
-        self.size_range = size_range
-        self.dtype = dtype
+        #self.width_range = width_range
+        #self.height_range = height_range
+        #self.size_range = size_range
+        #self.dtype = dtype
 
-    def __getitem__(self, index):
-        image = Image.open(self.image_paths[index])
-        image = self.resize_transforms(image)
-        numpy_array = np.array(image, dtype=self.dtype)
-        image_width, image_height = image.size
-        grayscale_image = _to_grayscale(numpy_array)
-        generator = np.random.default_rng(seed=index)
-        width = generator.integers(low=self.width_range[0], high=self.width_range[1] + 1)
-        height = generator.integers(low=self.height_range[0], high=self.height_range[1] + 1)
-        width = min(width, image_width)
-        height = min(height, image_height)
-        x = generator.integers(low=0, high=image_width - width + 1)
-        y = generator.integers(low=0, high=image_height - height + 1)
-        size = generator.integers(low=self.size_range[0], high=self.size_range[1] + 1)
-        pixelated_image, known_array, target_array = _prepare_image(grayscale_image, x, y, width, height, size)
-        pixelated_image = (pixelated_image / 255).astype(np.float32)
-        target_array = (target_array / 255).astype(np.float32)
+    #def __getitem__(self, index):
+        #image = Image.open(self.image_paths[index])
+        #image = self.resize_transforms(image)
+        #numpy_array = np.array(image, dtype=self.dtype)
+        #image_width, image_height = image.size
+        #grayscale_image = _to_grayscale(numpy_array)
+        #generator = np.random.default_rng(seed=index)
+        #width = generator.integers(low=self.width_range[0], high=self.width_range[1] + 1)
+        #height = generator.integers(low=self.height_range[0], high=self.height_range[1] + 1)
+        #width = min(width, image_width)
+        #height = min(height, image_height)
+        #x = generator.integers(low=0, high=image_width - width + 1)
+        #y = generator.integers(low=0, high=image_height - height + 1)
+        #size = generator.integers(low=self.size_range[0], high=self.size_range[1] + 1)
+        #pixelated_image, known_array, target_array = _prepare_image(grayscale_image, x, y, width, height, size)
+        #pixelated_image = (pixelated_image / 255).astype(np.float32)
+        #target_array = (target_array / 255).astype(np.float32)
 
-        #full_image = np.concatenate((pixelated_image, known_array), axis=0)
-        return pixelated_image, known_array, target_array, self.image_paths[index]
-
-
-    def __len__(self):
-        return len(self.image_paths)
+        ##full_image = np.concatenate((pixelated_image, known_array), axis=0)
+        #return pixelated_image, known_array, target_array, self.image_paths[index]
 
 
-import numpy as np
+    #def __len__(self):
+        #return len(self.image_paths)
+
+
 
 class ImageDepixelationTestDataset(Dataset):
     def __init__(self, data_path):
@@ -172,6 +171,81 @@ class ImageDepixelationTestDataset(Dataset):
 
     def __len__(self):
         return len(self.pixelated_images)
+
+class CropDataset(Dataset):
+    def __init__(self, image_dirs: list, crop_size: int, num_crops: int):
+        self.image_paths = []
+
+        for image_dir in image_dirs:
+            image_dir = os.path.abspath(image_dir)
+            filelist = glob.glob(os.path.join(image_dir, "**", "*"), recursive=True)
+            self.image_paths.extend([_get_absolute_path(f) for f in filelist if f.endswith(".jpg") and os.path.isfile(f)])
+
+        self.crop_size = crop_size
+        self.num_crops = num_crops
+
+    def __getitem__(self, index):
+        image_path = self.image_paths[index // self.num_crops]
+
+        generator = np.random.default_rng(seed=index)
+
+        image = Image.open(image_path)
+
+        left = generator.integers(low=0, high=image.width - self.crop_size + 1)
+        top = generator.integers(low=0, high=image.height - self.crop_size + 1)
+        right = left + self.crop_size
+        bottom = top + self.crop_size
+
+        cropped_img = image.crop((left, top, right, bottom))
+
+        return cropped_img, image_path
+
+    def __len__(self):
+        return len(self.image_paths) * self.num_crops
+
+
+class RandomImagePixelationDataset(Dataset):
+    def __init__(
+            self,
+            crop_dataset: CropDataset, 
+            width_range: tuple[int, int],
+            height_range: tuple[int, int],
+            size_range: tuple[int, int],
+            dtype: Optional[type] = None
+    ):
+        self.crop_dataset = crop_dataset
+
+        if width_range[0] < 2 or height_range[0] < 2 or size_range[0] < 2:
+            raise ValueError("The minimum sizes cannot be smaller than 2")
+        if width_range[0] > width_range[1] or height_range[0] > height_range[1] or size_range[0] > size_range[1]:
+            raise ValueError("The minimum sizes cannot exceed the maximum sizes")
+        
+        self.width_range = width_range
+        self.height_range = height_range
+        self.size_range = size_range
+        self.dtype = dtype
+
+    def __getitem__(self, index):
+        image, image_path =  self.crop_dataset[index]
+        numpy_array = np.array(image, dtype=self.dtype)
+        image_width, image_height = image.size
+        grayscale_image = _to_grayscale(numpy_array)
+        generator = np.random.default_rng(seed=index)
+        width = generator.integers(low=self.width_range[0], high=self.width_range[1] + 1)
+        height = generator.integers(low=self.height_range[0], high=self.height_range[1] + 1)
+        width = min(width, image_width)
+        height = min(height, image_height)
+        x = generator.integers(low=0, high=image_width - width + 1)
+        y = generator.integers(low=0, high=image_height - height + 1)
+        size = generator.integers(low=self.size_range[0], high=self.size_range[1] + 1)
+        pixelated_image, known_array, target_array = _prepare_image(grayscale_image, x, y, width, height, size)
+        pixelated_image = (pixelated_image / 255).astype(np.float32)
+        target_array = (target_array / 255).astype(np.float32)
+
+        return pixelated_image, known_array, target_array, image_path
+
+    def __len__(self):
+        return len(self.crop_dataset)
 
 
 
