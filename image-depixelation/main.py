@@ -33,7 +33,7 @@ def training_loop(network: torch.nn.Module,
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-    model = model.to(device)
+    network = network.to(device)
 
     training_losses = []
     evaluation_losses = []
